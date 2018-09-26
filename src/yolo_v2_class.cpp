@@ -16,6 +16,10 @@ extern "C" {
 }
 //#include <sys/time.h>
 
+#ifdef OPENCV
+#include <opencv2\opencv.hpp>
+#endif
+
 #include <vector>
 #include <iostream>
 #include <algorithm>
@@ -45,6 +49,8 @@ int detect_mat(const uint8_t* data, const size_t data_length, bbox_t_container &
 #ifdef OPENCV
     std::vector<char> vdata(data, data + data_length);
     cv::Mat image = imdecode(cv::Mat(vdata), 1);
+
+	// TODO: convert from cv::Mat to image_t
 
     std::vector<bbox_t> detection = detector->detect(image);
     for (size_t i = 0; i < detection.size() && i < C_SHARP_MAX_OBJECTS; ++i)
@@ -87,7 +93,7 @@ YOLODLL_API Detector::Detector(std::string cfg_filename, std::string weight_file
 #ifdef GPU
 	check_cuda( cudaGetDevice(&old_gpu_index) );
 #endif
-
+	  
 	detector_gpu_ptr = std::make_shared<detector_gpu_t>();
 	detector_gpu_t &detector_gpu = *static_cast<detector_gpu_t *>(detector_gpu_ptr.get());
 
@@ -123,12 +129,12 @@ YOLODLL_API Detector::Detector(std::string cfg_filename, std::string weight_file
 
 #ifdef GPU
 	check_cuda( cudaSetDevice(old_gpu_index) );
-#endif
+#endif   
 }
-
+ 
 
 YOLODLL_API Detector::~Detector() 
-{
+{ 
 	detector_gpu_t &detector_gpu = *static_cast<detector_gpu_t *>(detector_gpu_ptr.get());
 	layer l = detector_gpu.net.layers[detector_gpu.net.n - 1];
 
@@ -170,7 +176,7 @@ YOLODLL_API std::vector<bbox_t> Detector::detect(std::string image_filename, flo
 	std::shared_ptr<image_t> image_ptr(new image_t, [](image_t *img) { if (img->data) free(img->data); delete img; });
 	*image_ptr = load_image(image_filename);
 	return detect(*image_ptr, thresh, use_mean);
-}
+} 
 
 static image load_image_stb(char *filename, int channels)
 {
@@ -293,9 +299,9 @@ YOLODLL_API std::vector<bbox_t> Detector::detect(image_t img, float thresh, bool
 	free_detections(dets, nboxes);
 	if(sized.data)
 		free(sized.data);
-
+	 
 #ifdef GPU
-	if (cur_gpu_id != old_gpu_index)
+	if (cur_gpu_id != old_gpu_index) 
 		cudaSetDevice(old_gpu_index);
 #endif
 
@@ -313,7 +319,8 @@ YOLODLL_API std::vector<bbox_t> Detector::tracking_id(std::vector<bbox_t> cur_bb
 
 	if (!prev_track_id_present) {
 		for (size_t i = 0; i < cur_bbox_vec.size(); ++i)
-			cur_bbox_vec[i].track_id = det_gpu.track_id[cur_bbox_vec[i].obj_id]++;
+			cur_bbox_vec[i].track_id = det_gpu.track_id[0]++;
+			// cur_bbox_vec[i].track_id = det_gpu.track_id[cur_bbox_vec[i].obj_id]++;
 		prev_bbox_vec_deque.push_front(cur_bbox_vec);
 		if (prev_bbox_vec_deque.size() > frames_story) prev_bbox_vec_deque.pop_back();
 		return cur_bbox_vec;
