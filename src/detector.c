@@ -17,7 +17,11 @@
 #ifndef CV_VERSION_EPOCH
 #include "opencv2/videoio/videoio_c.h"
 #define OPENCV_VERSION CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)"" CVAUX_STR(CV_VERSION_REVISION)
+#ifdef _DEBUG
+#pragma comment(lib, "opencv_world" OPENCV_VERSION "d.lib")
+#else
 #pragma comment(lib, "opencv_world" OPENCV_VERSION ".lib")
+#endif
 #else
 #define OPENCV_VERSION CVAUX_STR(CV_VERSION_EPOCH)"" CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)
 #pragma comment(lib, "opencv_core" OPENCV_VERSION ".lib")
