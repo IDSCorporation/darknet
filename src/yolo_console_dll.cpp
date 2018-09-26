@@ -15,7 +15,7 @@
 #endif
 
 // To use tracking - uncomment the following line. Tracking is supported only by OpenCV 3.x
-//#define TRACK_OPTFLOW
+#define TRACK_OPTFLOW
 
 //#include "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.1\include\cuda_runtime.h"
 //#pragma comment(lib, "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v9.1/lib/x64/cudart.lib")
@@ -26,16 +26,21 @@
 #ifdef OPENCV
 #include <opencv2/opencv.hpp>			// C++
 #include "opencv2/core/version.hpp"
+#include <opencv2/core/utils/logger.hpp>			// C++
 #ifndef CV_VERSION_EPOCH
 #include "opencv2/videoio/videoio.hpp"
 #define OPENCV_VERSION CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)"" CVAUX_STR(CV_VERSION_REVISION)
+#ifdef _DEBUG
+#pragma comment(lib, "opencv_world" OPENCV_VERSION "d.lib")
+#else
 #pragma comment(lib, "opencv_world" OPENCV_VERSION ".lib")
+#endif
 #ifdef TRACK_OPTFLOW
-#pragma comment(lib, "opencv_cudaoptflow" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_cudaimgproc" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_core" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_imgproc" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_highgui" OPENCV_VERSION ".lib")
+//#pragma comment(lib, "opencv_cudaoptflow" OPENCV_VERSION ".lib")
+//#pragma comment(lib, "opencv_cudaimgproc" OPENCV_VERSION ".lib")
+//#pragma comment(lib, "opencv_core" OPENCV_VERSION ".lib")
+//#pragma comment(lib, "opencv_imgproc" OPENCV_VERSION ".lib")
+//#pragma comment(lib, "opencv_highgui" OPENCV_VERSION ".lib")
 #endif	// TRACK_OPTFLOW
 #else
 #define OPENCV_VERSION CVAUX_STR(CV_VERSION_EPOCH)""CVAUX_STR(CV_VERSION_MAJOR)""CVAUX_STR(CV_VERSION_MINOR)
@@ -226,10 +231,15 @@ std::vector<std::string> objects_names_from_file(std::string const filename) {
 
 int main(int argc, char *argv[])
 {
-	std::string  names_file = "data/coco.names";
-	std::string  cfg_file = "cfg/yolov3.cfg";
-	std::string  weights_file = "yolov3.weights";
+	std::string  names_file = "x64/data/powerline.names";//"x64/data/classifier.names"; //"x64/data/coco.names";//"x64/data/powerline.names";//"data/classifier.names";//"data/powerline.names";//"data/coco.names";
+	std::string  cfg_file = "cfg/powerline.cfg"; //"x64/cfg/classifier.cfg"; //"x64/cfg/yolov3.cfg";//"x64/cfg/powerline.cfg";//"cfg/classifier.cfg";//"cfg/powerline.cfg";//"cfg/yolov3.cfg";
+	std::string  weights_file = "x64/powerline_1400.weights"; //"x64/classifier_4100.weights"; //"x64/yolov3.weights";// "x64/powerline_1400.weights";// "classifier_4100.weights";//"powerline_1400.weights";//"yolov3.weights";
 	std::string filename;
+	
+	//s.due
+	
+	cv::utils::logging::setLogLevel(cv::utils::logging::LogLevel::LOG_LEVEL_VERBOSE);
+	//--
 
 	if (argc > 4) {	//voc.names yolo-voc.cfg yolo-voc.weights test.mp4		
 		names_file = argv[1];
@@ -241,7 +251,9 @@ int main(int argc, char *argv[])
 
 	float const thresh = (argc > 5) ? std::stof(argv[5]) : 0.20;
 
-	Detector detector(cfg_file, weights_file);
+	Detector detector(cfg_file, weights_file); // add integer in the end of call to select another gpu
+
+	//Detector detector_crop(cfg_file, weights_file); // add integer in the end of call to select another gpu
 
 	auto obj_names = objects_names_from_file(names_file);
 	std::string out_videofile = "result.avi";
@@ -266,16 +278,19 @@ int main(int argc, char *argv[])
 			bool show_small_boxes = false;
 
 			std::string const file_ext = filename.substr(filename.find_last_of(".") + 1);
-			std::string const protocol = filename.substr(0, 7);
-			if (file_ext == "avi" || file_ext == "mp4" || file_ext == "mjpg" || file_ext == "mov" || 	// video file
-				protocol == "rtmp://" || protocol == "rtsp://" || protocol == "http://" || protocol == "https:/")	// video network stream
+			std::string const protocol = filename.substr(0, filename.find_first_of(":"));
+			//std::string const protocol = filename.substr(0, 7);
+			if (file_ext == "avi" || file_ext == "mp4" || file_ext == "mjpg" || file_ext == "mov" || file_ext == "sdp" || 	// video file
+				protocol == "rtmp" || protocol == "rtsp" || protocol == "http" || protocol == "https" || protocol == "udp" || protocol == "rtp")	// video network stream
 			{
 				cv::Mat cap_frame, cur_frame, det_frame, write_frame;
 				std::queue<cv::Mat> track_optflow_queue;
 				int passed_flow_frames = 0;
 				std::shared_ptr<image_t> det_image;
-				std::vector<bbox_t> result_vec, thread_result_vec;
+				std::shared_ptr<image_t> det_image_crop;
+				std::vector<bbox_t> result_vec, thread_result_vec, result_vec_crop;
 				detector.nms = 0.02;	// comment it - if track_id is not required
+				//detector_crop.nms = 0.02;
 				std::atomic<bool> consumed, videowrite_ready;
 				bool exit_flag = false;
 				consumed = true;
@@ -288,7 +303,14 @@ int main(int argc, char *argv[])
 				std::mutex mtx;
 				std::condition_variable cv_detected, cv_pre_tracked;
 				std::chrono::steady_clock::time_point steady_start, steady_end;
-				cv::VideoCapture cap(filename); cap >> cur_frame;
+				cv::VideoCapture cap(filename);// , cv::CAP_FFMPEG);
+				
+				//s.due
+				if(!cap.isOpened())
+					std::cout << "VideoCapture error: not opened!\n";
+				//--
+
+				cap >> cur_frame;
 				int const video_fps = cap.get(CV_CAP_PROP_FPS);
 				cv::Size const frame_size = cur_frame.size();
 				cv::VideoWriter output_video;
@@ -306,7 +328,7 @@ int main(int argc, char *argv[])
 					t_cap = std::thread([&]() { cap >> cap_frame; });
 					++cur_time_extrapolate;
 
-					// swap result bouned-boxes and input-frame
+					// swap result bounded-boxes and input-frame
 					if(consumed)
 					{
 						std::unique_lock<std::mutex> lock(mtx);
@@ -337,6 +359,7 @@ int main(int argc, char *argv[])
 							extrapolate_coords.update_result(result_vec, cur_time_extrapolate - 1);
 						}
 #else
+						
 						result_vec = detector.tracking_id(result_vec);	// comment it - if track_id is not required					
 						extrapolate_coords.new_result(result_vec, cur_time_extrapolate - 1);
 #endif
@@ -439,20 +462,26 @@ int main(int argc, char *argv[])
 				if (t_detect.joinable()) t_detect.join();
 				if (t_videowrite.joinable()) t_videowrite.join();
 				std::cout << "Video ended \n";
-				break;
 			}
 			else if (file_ext == "txt") {	// list of image files
 				std::ifstream file(filename);
 				if (!file.is_open()) std::cout << "File not found! \n";
-				else 
-					for (std::string line; file >> line;) {
+				else
+				{
+					int count = 0;
+					std::string filename_out = "result";
+					for (std::string line; file >> line; count++) {
 						std::cout << line << std::endl;
 						cv::Mat mat_img = cv::imread(line);
 						std::vector<bbox_t> result_vec = detector.detect(mat_img);
 						show_console_result(result_vec, obj_names);
+
+						std::string query(filename_out + std::to_string(count) + ".jpg");
+						cv::imwrite(query, mat_img);
 						//draw_boxes(mat_img, result_vec, obj_names);
 						//cv::imwrite("res_" + line, mat_img);
 					}
+				}
 				
 			}
 			else {	// image file
@@ -467,6 +496,7 @@ int main(int argc, char *argv[])
 				//result_vec = detector.tracking_id(result_vec);	// comment it - if track_id is not required
 				draw_boxes(mat_img, result_vec, obj_names);
 				cv::imshow("window name", mat_img);
+				cv::imwrite("result.jpg", mat_img);
 				show_console_result(result_vec, obj_names);
 				cv::waitKey(0);
 			}
