@@ -215,10 +215,15 @@ public:
 		}
 
 		if (prev_pts.rows == 0)
+		{
+			prev_pts.push_back(cv::Point2f(0,0));
+		}
+
+		if (prev_pts.rows == 0)
 			prev_pts_flow_cpu = cv::Mat();
 		else
 			cv::transpose(prev_pts, prev_pts_flow_cpu);
-
+		 
 		if (prev_pts_flow_gpu.cols < prev_pts_flow_cpu.cols) {
 			prev_pts_flow_gpu = cv::cuda::GpuMat(prev_pts_flow_cpu.size(), prev_pts_flow_cpu.type());
 			cur_pts_flow_gpu = cv::cuda::GpuMat(prev_pts_flow_cpu.size(), prev_pts_flow_cpu.type());
@@ -429,7 +434,7 @@ public:
 				float moved_y = cur_key_pt.y - prev_key_pt.y;
 
 				if (abs(moved_x) < 100 && abs(moved_y) < 100 && good_bbox_vec_flags[i])
-					if (err.at<float>(0, i) < flow_error && status.at<unsigned char>(0, i) != 0 &&
+					if (err.at<float>(i, 0) < flow_error && status.at<unsigned char>(i, 0) != 0 &&
 						((float)cur_bbox_vec[i].x + moved_x) > 0 && ((float)cur_bbox_vec[i].y + moved_y) > 0)
 					{
 						cur_bbox_vec[i].x += moved_x + 0.5;
